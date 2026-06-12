@@ -1311,33 +1311,14 @@ function esconderErro() {
   document.getElementById('error-msg').style.display = 'none';
 }
 
-async function fazerLogin() {
+function fazerLogin() {
   const email = document.getElementById('login-email').value.trim();
   const senha = document.getElementById('login-senha').value;
   if (!email || !senha) { mostrarErro('Preencha email e senha.'); return; }
-
-  const btn = document.querySelector('#form-entrar .btn-primary');
-  btn.innerHTML = '<span class="spinner"></span> Entrando...';
-  btn.disabled = true;
-
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    if (error) { mostrarErro('Email ou senha incorretos.'); btn.innerHTML = '<i class="ti ti-login"></i> Entrar na plataforma'; btn.disabled = false; return; }
-
-    // Buscar dados do usuário
-    const { data: userData } = await supabase.from('usuarios').select('*').eq('email', email).single();
-    const user = userData || { nome: email.split('@')[0], email, plano: 'gratis' };
-    localStorage.setItem('aulafacil_sessao', JSON.stringify(user));
-    entrar(user);
-  } catch(e) {
-    // Fallback local se Supabase offline
-    const users = JSON.parse(localStorage.getItem('aulafacil_users') || '[]');
-    const user = users.find(u => u.email === email && u.senha === senha);
-    if (!user) { mostrarErro('Email ou senha incorretos.'); }
-    else { entrar(user); }
-  }
-  btn.innerHTML = '<i class="ti ti-login"></i> Entrar na plataforma';
-  btn.disabled = false;
+  const users = JSON.parse(localStorage.getItem('aulafacil_users') || '[]');
+  const user = users.find(u => u.email === email && u.senha === senha);
+  if (!user) { mostrarErro('Email ou senha incorretos.'); return; }
+  entrar(user);
 }
 
 // Código secreto do clube
@@ -1353,7 +1334,7 @@ function toggleCodigo() {
   }
 }
 
-async function criarConta() {
+function criarConta() {
   const nome  = document.getElementById('cad-nome').value.trim();
   const email = document.getElementById('cad-email').value.trim();
   const senha = document.getElementById('cad-senha').value;
@@ -1373,56 +1354,12 @@ async function criarConta() {
     planoFinal = 'clube';
   }
 
-  const btn = document.querySelector('#form-cadastrar .btn-primary');
-  btn.innerHTML = '<span class="spinner"></span> Criando conta...';
-  btn.disabled = true;
-
-  try {
-    // Criar usuário no Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email, password: senha,
-      options: { data: { nome, plano: planoFinal } }
-    });
-
-    if (authError) {
-      if (authError.message.includes('already registered')) {
-        mostrarErro('Este email já está cadastrado.');
-      } else {
-        mostrarErro('Erro ao criar conta: ' + authError.message);
-      }
-      btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar minha conta';
-      btn.disabled = false;
-      return;
-    }
-
-    // Salvar na tabela usuarios
-    await supabase.from('usuarios').insert({
-      id: authData.user.id,
-      nome, email, plano: planoFinal
-    });
-
-    const user = { nome, email, plano: planoFinal, id: authData.user?.id };
-    localStorage.setItem('aulafacil_sessao', JSON.stringify(user));
-
-    // Fallback local também
-    const users = JSON.parse(localStorage.getItem('aulafacil_users') || '[]');
-    users.push({ nome, email, senha, plano: planoFinal, criado: new Date().toISOString() });
-    localStorage.setItem('aulafacil_users', JSON.stringify(users));
-
-    entrar(user);
-
-  } catch(e) {
-    // Fallback local se Supabase offline
-    const users = JSON.parse(localStorage.getItem('aulafacil_users') || '[]');
-    if (users.find(u => u.email === email)) { mostrarErro('Este email já está cadastrado.'); btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar minha conta'; btn.disabled = false; return; }
-    const user = { nome, email, senha, plano: planoFinal, criado: new Date().toISOString() };
-    users.push(user);
-    localStorage.setItem('aulafacil_users', JSON.stringify(users));
-    entrar(user);
-  }
-
-  btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar minha conta';
-  btn.disabled = false;
+  const users = JSON.parse(localStorage.getItem('aulafacil_users') || '[]');
+  if (users.find(u => u.email === email)) { mostrarErro('Este email já está cadastrado.'); return; }
+  const user = { nome, email, senha, plano: planoFinal, criado: new Date().toISOString() };
+  users.push(user);
+  localStorage.setItem('aulafacil_users', JSON.stringify(users));
+  entrar(user);
 }
 
 function entrarDemo() {
@@ -1482,21 +1419,8 @@ function sair() {
 }
 
 // Auto-login se tiver sessão salva
-window.addEventListener('load', async () => {
+window.addEventListener('load', () => {
   carregarApiKey();
-  
-  // Verificar sessão Supabase
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      const { data: userData } = await supabase.from('usuarios').select('*').eq('email', session.user.email).single();
-      const user = userData || { nome: session.user.email.split('@')[0], email: session.user.email, plano: 'gratis' };
-      entrar(user);
-      return;
-    }
-  } catch(e) {}
-
-  // Fallback sessão local
   const sessao = localStorage.getItem('aulafacil_sessao');
   if (sessao) {
     try { entrar(JSON.parse(sessao)); } catch(e) { localStorage.removeItem('aulafacil_sessao'); }
